@@ -82,6 +82,8 @@ void accelerometer_init()
 	/* Set the sensor configuration */
 	rslt = bmi160_set_sens_conf(&sensor);	
 
+	
+
 }
 
 //==============================================================================

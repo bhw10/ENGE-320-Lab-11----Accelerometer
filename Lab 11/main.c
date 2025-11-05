@@ -32,7 +32,7 @@
 //      \/  /~~\ |  \ | /~~\ |__) |___ |___ .__/
 //
 //-----------------------------------------------------------------------------
-
+static volatile uint32_t millis;
 //-----------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
 //     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
@@ -50,17 +50,21 @@
 //=============================================================================
 int main(void)
 {
-	//int8_t rslt = BMI160_OK;
+	uint32_t old_millis = 0;
 	/* Initialize the SAM system */
 	SystemInit();
 	i2c_init();
 	accelerometer_init();
+	SysTick_Config(48000); // every ms
 	
 	while (1)
 	{
-		/* To read only Accel data */
+		if ((millis - old_millis) > 17)
+		{
+			old_millis = millis;
+		}
 		accelerometer_get();
-		DelayMs(500);	
+			
 	}
 }
 
@@ -79,3 +83,7 @@ int main(void)
 //     | .__/ |  \ .__/
 //
 //-----------------------------------------------------------------------------
+void SysTick_Handler()
+{
+	millis++;
+}
