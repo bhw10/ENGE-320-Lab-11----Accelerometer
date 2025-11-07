@@ -5,11 +5,8 @@
 //
 //------------------------------------------------------------------------------
 
-#include "sam.h"
-#include "accelerometer.h"
-#include "i2c.h"
-#include "delay.h"
-#include "bmi160.h"
+#include "serial.h"
+#include <avr/interrupt.h>
 
 //------------------------------------------------------------------------------
 //      __   ___  ___         ___  __
@@ -31,21 +28,20 @@
 //      \/  /~~\ |  \ | /~~\ |__) |___ |___ .__/
 //
 //------------------------------------------------------------------------------
-int8_t rslt = BMI160_OK;
-struct bmi160_dev sensor;
-struct bmi160_sensor_data accel;
-struct bmi160_sensor_data temp_accel;
-extern uint8_t accel_data[6];
+
+volatile uint8_t cur_char;
+volatile uint8_t printing;
+volatile uint8_t completed;
+volatile uint8_t read_char;
+static volatile char str[MAX_LENGTH];
+
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
 //     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
 //     |    |  \ \__/  |  \__/  |   |  |    |___ .__/
 //
 //------------------------------------------------------------------------------
-int test_eeprom(void);
-void user_delay_ms(uint32_t ms);
-int8_t user_i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint16_t length);
-int8_t user_i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint16_t length);
+
 //------------------------------------------------------------------------------
 //      __        __          __
 //     |__) |  | |__) |    | /  `
@@ -54,93 +50,81 @@ int8_t user_i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint16_
 //------------------------------------------------------------------------------
 
 //==============================================================================
-void accelerometer_init()
+void serial_init()
 {
-	uint8_t data[32];
-	uint8_t address;
-	uint8_t retval;
-
-	sensor.id = BMI160_I2C_ADDR;
-	sensor.interface = BMI160_I2C_INTF;
-	sensor.read = user_i2c_read;
-	sensor.write = user_i2c_write;
-	sensor.delay_ms = user_delay_ms;
+	// USART0 Init
+	// 8 bit data, 1 stop, no parity
+	// Receiver: ON
+	// Transmitter: ON
+	// Mode: Async
+	// USART Baud Rate: 9600
 	
-	retval = bmi160_init(&sensor);
-	/* After the above function call, accel and gyro parameters in the device structure
-	are set with default values, found in the datasheet of the sensor */
-	
-	/* Select the Output data rate, range of accelerometer sensor */
-	sensor.accel_cfg.odr = BMI160_ACCEL_ODR_1600HZ;
-	sensor.accel_cfg.range = BMI160_ACCEL_RANGE_2G;
-	sensor.accel_cfg.bw = BMI160_ACCEL_BW_NORMAL_AVG4;
-	/* Select the power mode of accelerometer sensor */
-	sensor.accel_cfg.power = BMI160_ACCEL_NORMAL_MODE;
-
-	
-	/* Set the sensor configuration */
-	rslt = bmi160_set_sens_conf(&sensor);	
-
-	
-
+	UCSR0A = 0;
+	UCSR0B = (1 << RXEN0) | (1 << TXEN0) | (1 << 6) | (1 << 7);
+	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+	UBRR0H = 0;
+	UBRR0L = 0;
+	cur_char = 0;
+	printing = 0;
 }
 
 //==============================================================================
-
-uint8_t accelerometer_get()
+void serial_write(uint8_t data)
 {
-	__disable_irq(); // Atomic (disable interrupts)
-	bmi160_get_sensor_data(BMI160_ACCEL_SEL, &temp_accel, NULL, &sensor); // pack sensor data into temp_accel
-	if (memcmp(&temp_accel, &accel, sizeof(accel))) // if temp_accel is different than old accel
+	// Wait for the empty transmit buffer
+	while ( !(UCSR0A & ( 1 << UDRE0)) )
 	{
-		memcpy(&accel, &temp_accel, sizeof(accel)); // copy temp accel into accel
-		__enable_irq(); // reenable interrupts
-		return 1; 
+		; // WAIT HEHEHE :P
 	}
-	__enable_irq();
-	return 0;
+	
+	// Put data into buffer and send it
+	UDR0 = data;
 }
 
 //==============================================================================
-
-void accelerometer_update()
+uint8_t serial_read()
 {
-	//int8_t high_x = accel.x >> 8; // High byte of x
-	user_i2c_read(BMI160_I2C_ADDR, BMI160_ACCEL_DATA_ADDR, accel_data, 0);
+	//// Wait for data to be received
+	//while ( !(UCSR0A & (1 << RXC0)))
+	//{
+	//	; // WAIT HEHEHE :P
+	//}
+	//
+	//// Get and return the received data
+	
+	uint8_t new_value = read_char;
+	read_char = 0;
+	return new_value;
 }
+
+//==============================================================================
+void serial_print(char new_str[])
+{
+	if (printing)
+	{
+		return;
+	}
+	
+	printing = 1;
+	cur_char = 0;
+	completed = 0;
+	for (int i = 0; i < MAX_LENGTH; i++)
+	{
+		str[i] = new_str[i];
+	}
+	
+	if (str[cur_char] == 0) completed = 1;
+	UDR0 = str[cur_char];
+	cur_char++;
+}
+
 //------------------------------------------------------------------------------
 //      __   __              ___  ___
 //     |__) |__) | \  /  /\   |  |__
 //     |    |  \ |  \/  /~~\  |  |___
 //
 //------------------------------------------------------------------------------
-void user_delay_ms(uint32_t ms)
-{
-	DelayMs(ms);
-}
 
-//=============================================================================
-int8_t user_i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint16_t length)
-{
-	i2c_read_setup(dev_addr << 1, &reg_addr, 1);
-	i2c_read(dev_addr << 1,data,length);
-	return BMI160_OK;
-}
-
-//=============================================================================
-int8_t user_i2c_write(uint8_t dev_addr, uint8_t reg_addr,
-uint8_t *data, uint16_t length)
-{
-	uint8_t mydata[32];
-	if (length > 31) length = 31;
-	// Add 1 to include the reg address
-	length++;
-	//Send the address
-	mydata[0] = reg_addr;
-	bcopy(data, mydata+1, length);
-	i2c_write(dev_addr << 1,mydata,length);
-	return BMI160_OK;
-}
 //------------------------------------------------------------------------------
 //      __                  __        __        __
 //     /  `  /\  |    |    |__)  /\  /  ` |__/ /__`
@@ -154,3 +138,21 @@ uint8_t *data, uint16_t length)
 //     | .__/ |  \  .__/
 //
 //------------------------------------------------------------------------------
+ISR(USART_TX_vect)
+{
+	if (completed)
+	{
+		printing = 0;
+	}
+	else
+	{
+		if (str[cur_char] == 0) completed = 1;
+		UDR0 = str[cur_char];
+		cur_char++;
+	}
+}
+
+ISR(USART_RX_vect)
+{
+	read_char = UDR0;
+}

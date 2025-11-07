@@ -17,6 +17,23 @@
 //
 //------------------------------------------------------------------------------
 
+#define I2C_SCL (PORT_PA23)
+#define I2C_SCL_GROUP (0)
+#define I2C_SCL_PIN (PIN_PA23%32)
+#define I2C_SCL_PMUX (I2C_SCL_PIN/2)
+
+#define I2C_SDA (PORT_PA22)
+#define I2C_SDA_GROUP (0)
+#define I2C_SDA_PIN (PIN_PA22%32)
+#define I2C_SDA_PMUX (I2C_SDA_PIN/2)
+
+
+#define I2C_SERCOM            SERCOM3
+#define I2C_SERCOM_PMUX       PORT_PMUX_PMUXE_C_Val
+#define I2C_SERCOM_GCLK_ID    SERCOM3_GCLK_ID_CORE
+#define I2C_SERCOM_CLK_GEN    0
+#define I2C_SERCOM_APBCMASK   PM_APBCMASK_SERCOM3
+
 //------------------------------------------------------------------------------
 //     ___      __   ___  __   ___  ___  __
 //      |  \ / |__) |__  |  \ |__  |__  /__`

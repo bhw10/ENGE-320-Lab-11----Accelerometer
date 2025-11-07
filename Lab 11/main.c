@@ -6,7 +6,6 @@
 //------------------------------------------------------------------------------
 
 #include "sam.h"
-#include "sam.h"
 #include "i2c.h"
 #include "delay.h"
 #include "bmi160.h"
@@ -33,13 +32,16 @@
 //
 //-----------------------------------------------------------------------------
 static volatile uint32_t millis;
+uint8_t accel_data[6];
+uint32_t old_millis = 0;
+uint32_t new_millis = 0;
 //-----------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
 //     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
 //     |    |  \ \__/  |  \__/  |   |  |    |___ .__/
 //
 //-----------------------------------------------------------------------------
-
+static uint32_t getMillis();
 //-----------------------------------------------------------------------------
 //      __        __          __
 //     |__) |  | |__) |    | /  `
@@ -50,20 +52,20 @@ static volatile uint32_t millis;
 //=============================================================================
 int main(void)
 {
-	uint32_t old_millis = 0;
 	/* Initialize the SAM system */
 	SystemInit();
 	i2c_init();
 	accelerometer_init();
 	SysTick_Config(48000); // every ms
-	
+
 	while (1)
 	{
-		if ((millis - old_millis) > 17)
+		new_millis = getMillis();
+		if ((new_millis - old_millis) > 17)
 		{
-			old_millis = millis;
+			old_millis = new_millis;
+			accelerometer_update();
 		}
-		accelerometer_get();
 			
 	}
 }
@@ -75,7 +77,13 @@ int main(void)
 //     |    |  \ |  \/  /~~\  |  |___
 //
 //-----------------------------------------------------------------------------
-//=============================================================================
+static uint32_t getMillis()
+{
+	__disable_irq();
+	uint32_t my_millis = millis;
+	__enable_irq();
+	return my_millis;
+}
 
 //-----------------------------------------------------------------------------
 //        __   __   __
