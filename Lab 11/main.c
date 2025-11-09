@@ -59,11 +59,16 @@ int main(void)
 	
 	while (1)
 	{
-		if ((millis - old_millis) > 17)
+		if ((millis - old_millis) > 49)
 		{
+			if (accelerometer_update())
+			{
+				__NOP();
+			}
 			old_millis = millis;
 		}
-		accelerometer_get();
+		uint16_t testX = accelerometer_getX();
+		uint16_t testY = accelerometer_getY();
 			
 	}
 }

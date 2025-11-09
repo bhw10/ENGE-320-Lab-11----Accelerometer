@@ -32,8 +32,9 @@
 //------------------------------------------------------------------------------
 int8_t rslt = BMI160_OK;
 struct bmi160_dev sensor;
-struct bmi160_sensor_data accel;
-struct bmi160_sensor_data temp_accel;
+static struct bmi160_sensor_data accel_0, accel_1;
+static struct bmi160_sensor_data *accel_read_addr = &accel_0;
+static struct bmi160_sensor_data *accel_write_addr = &accel_1;
 
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
@@ -68,6 +69,7 @@ void accelerometer_init()
 	sensor.delay_ms = user_delay_ms;
 	
 	retval = bmi160_init(&sensor);
+	sensor.delay_ms(100);
 	/* After the above function call, accel and gyro parameters in the device structure
 	are set with default values, found in the datasheet of the sensor */
 	
@@ -81,6 +83,9 @@ void accelerometer_init()
 	
 	/* Set the sensor configuration */
 	rslt = bmi160_set_sens_conf(&sensor);	
+	sensor.delay_ms(100);
+	accel_read_addr = &accel_1;
+	accel_write_addr = &accel_0;
 
 	
 
@@ -88,19 +93,38 @@ void accelerometer_init()
 
 //==============================================================================
 
-uint8_t accelerometer_get()
+uint16_t accelerometer_getX()
 {
+	return accel_read_addr->x;
+}
+
+uint16_t accelerometer_getY()
+{
+	return accel_read_addr->y;
+}
+
+uint8_t accelerometer_update()
+{
+	bmi160_get_sensor_data(BMI160_ACCEL_SEL, accel_read_addr, NULL, &sensor); // pack sensor data into temp_accel
 	__disable_irq(); // Atomic (disable interrupts)
-	bmi160_get_sensor_data(BMI160_ACCEL_SEL, &temp_accel, NULL, &sensor); // pack sensor data into temp_accel
-	if (memcmp(&temp_accel, &accel, sizeof(accel))) // if temp_accel is different than old accel
+	if (memcmp(accel_read_addr, accel_write_addr, sizeof(accel_read_addr))) // if temp_accel is different than old accel
 	{
-		memcpy(&accel, &temp_accel, sizeof(accel)); // copy temp accel into accel
+		if (accel_read_addr == &accel_0)
+		{
+			accel_read_addr = &accel_1;
+			accel_write_addr = &accel_0;
+		}
+		else
+		{
+			accel_read_addr = &accel_0;
+			accel_write_addr = &accel_1;
+		}
 		__enable_irq(); // reenable interrupts
 		return 1; 
 	}
 	__enable_irq();
 	return 0;
-}
+};
 //------------------------------------------------------------------------------
 //      __   __              ___  ___
 //     |__) |__) | \  /  /\   |  |__
