@@ -6,11 +6,9 @@
 //------------------------------------------------------------------------------
 
 #include "sam.h"
-#include "sam.h"
 #include "i2c.h"
 #include "delay.h"
 #include "bmi160.h"
-#include "accelerometer.h"
 
 //-----------------------------------------------------------------------------
 //      __   ___  ___         ___  __
@@ -32,13 +30,18 @@
 //      \/  /~~\ |  \ | /~~\ |__) |___ |___ .__/
 //
 //-----------------------------------------------------------------------------
+
 static volatile uint32_t millis;
+
 //-----------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
 //     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
 //     |    |  \ \__/  |  \__/  |   |  |    |___ .__/
 //
 //-----------------------------------------------------------------------------
+
+uint32_t get_timer_ms();
+void clear_millis();
 
 //-----------------------------------------------------------------------------
 //      __        __          __
@@ -50,24 +53,33 @@ static volatile uint32_t millis;
 //=============================================================================
 int main(void)
 {
-	uint32_t old_millis = 0;
-	/* Initialize the SAM system */
-	SystemInit();
-	i2c_init();
-	accelerometer_init();
-	SysTick_Config(48000); // every ms
-	
-	while (1)
-	{
-		if ((millis - old_millis) > 17)
-		{
-			old_millis = millis;
-		}
-		accelerometer_get();
-			
-	}
-}
+    
 
+    /* Initialize the SAM system */
+    SystemInit();
+    SysTick_Config(48000);
+    i2c_init();
+	accelerometer_init();
+	
+    while (1) 
+    {
+		// if we have newbmi i2c data, update our struct
+		
+		if(i2c_bmiUpdated())
+		{
+			
+			accelerometer_update();
+			i2c_bmiUpdated_clear(); // keep this at end
+		}
+		
+		if(get_timer_ms() >= 100)
+		{
+			
+			i2c_bmi_update_accel(0x68);
+			clear_millis();
+		}
+    }
+}
 
 //-----------------------------------------------------------------------------
 //      __   __              ___  ___
@@ -75,7 +87,18 @@ int main(void)
 //     |    |  \ |  \/  /~~\  |  |___
 //
 //-----------------------------------------------------------------------------
-//=============================================================================
+
+void clear_millis()
+{
+	__disable_irq();
+	millis = 0;
+	__enable_irq();
+}
+
+uint32_t get_timer_ms()
+{
+	return millis;
+}
 
 //-----------------------------------------------------------------------------
 //        __   __   __
@@ -83,7 +106,7 @@ int main(void)
 //     | .__/ |  \ .__/
 //
 //-----------------------------------------------------------------------------
-void SysTick_Handler()
+void SysTick_Handler ()
 {
 	millis++;
 }

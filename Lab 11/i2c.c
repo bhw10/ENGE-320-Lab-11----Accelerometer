@@ -54,9 +54,10 @@ enum
 //------------------------------------------------------------------------------
 
 volatile bool isBMI = false;			// if i2c is for bmi
-volatile uint8_t bmi_steps = 0;			// steps we are at, max is 8
-volatile uint8_t i2c_read_addr;
-volatile uint8_t *i2c_read_data;
+volatile bool bmiUpdated = false;		// did we complete i2c process?
+volatile uint8_t bmi_steps = 0;			// steps we are at, max is 7
+volatile uint8_t bmi_temp_store[6] = {0};	// store data from interrupts
+
 //------------------------------------------------------------------------------
 //      __   __   __  ___  __  ___      __   ___  __
 //     |__) |__) /  \  |  /  \  |  \ / |__) |__  /__`
@@ -235,12 +236,50 @@ uint8_t i2c_read(uint8_t addr, uint8_t *data, int size)
 
 void i2c_testwrite(uint8_t addr)
 {
-	// Send the address
 	isBMI = true;
 	bmi_steps = 0;
 	I2C_SERCOM->I2CM.ADDR.reg = (addr * 2) | I2C_TRANSFER_WRITE;
 	I2C_SERCOM->I2CM.INTENSET.reg = 1;
 	
+}
+
+/************************************************************************/
+/* do the i2c process                                                   */
+/************************************************************************/
+void i2c_bmi_update_accel(uint8_t addr)
+{
+	// return if we are currently doing i2c process
+	if(isBMI)
+	{
+		return;
+	}
+	
+	isBMI = true;		// set we are doing process
+	bmi_steps = 0;		// reset steps
+	
+	
+	I2C_SERCOM->I2CM.ADDR.reg = (addr  << 1) | I2C_TRANSFER_WRITE;	// set adress
+	I2C_SERCOM->I2CM.INTENSET.reg = 1;
+}
+
+bool i2c_get_isBMI()
+{
+	return isBMI; 
+}
+
+bool i2c_bmiUpdated()
+{
+	return bmiUpdated;
+}
+
+void i2c_bmiUpdated_clear()
+{
+	bmiUpdated = false;
+}
+
+uint8_t* get_newDataArray()
+{
+	return bmi_temp_store;
 }
 
 //------------------------------------------------------------------------------
@@ -306,12 +345,14 @@ void SERCOM3_Handler()
 
 				I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;	
 				I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_CMD(3);
+				bmi_temp_store[bmi_steps - 2] = I2C_SERCOM->I2CM.DATA.reg;
 				I2C_SERCOM->I2CM.INTENCLR.reg = 2;
+				isBMI = false;
+				bmiUpdated = true;
 			}
-			else
+			else // when step is 2,3,4,5,6
 			{		// default case
-				i2c_read_data[bmi_steps - 1] = I2C_SERCOM->I2CM.DATA.reg;
-				I2C_SERCOM->I2CM.DATA.reg;		
+				bmi_temp_store[bmi_steps - 2] = I2C_SERCOM->I2CM.DATA.reg;		
 				SERCOM3->I2CM.INTFLAG.bit.SB = 0;
 			}
 			bmi_steps++;

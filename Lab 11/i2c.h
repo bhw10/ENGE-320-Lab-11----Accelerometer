@@ -9,6 +9,7 @@
 //------------------------------------------------------------------------------
 
 #include <sam.h>
+#include <stdbool.h>
 
 //------------------------------------------------------------------------------
 //      __   ___  ___         ___  __
@@ -38,6 +39,8 @@
 //
 //------------------------------------------------------------------------------
 
+
+
 //------------------------------------------------------------------------------
 //      __        __          __
 //     |__) |  | |__) |    | /  `
@@ -49,5 +52,13 @@ void i2c_init(void);
 uint8_t i2c_write(uint8_t addr, uint8_t *data, int size);
 uint8_t i2c_read_setup(uint8_t addr, uint8_t *data, int size);
 uint8_t i2c_read(uint8_t addr, uint8_t *data, int size);
+void i2c_testwrite(uint8_t addr);
+void i2c_bmi_update_accel(uint8_t addr);
+bool i2c_get_isBMI();
+uint8_t* get_newDataArray();
+void i2c_bmiUpdated_clear();
+bool i2c_bmiUpdated();
+
+
 
 #endif /* I2C_H */
