@@ -224,31 +224,13 @@ uint8_t i2c_read_setup(uint8_t addr, uint8_t *data, int size)
 //==============================================================================
 uint8_t i2c_read(uint8_t addr, uint8_t *data, int size)
 {
-	I2C_SERCOM->I2CM.ADDR.reg = addr | I2C_TRANSFER_READ;
-
-	while (0 == (I2C_SERCOM->I2CM.INTFLAG.reg & SERCOM_I2CM_INTFLAG_SB));
-
-	if (I2C_SERCOM->I2CM.STATUS.reg & SERCOM_I2CM_STATUS_RXNACK)
-	{
-		I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_CMD(3);
-		return false;
-	}
-
-	I2C_SERCOM->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
-
-	for (int i = 0; i < size-1; i++)
-	{
-		data[i] = I2C_SERCOM->I2CM.DATA.reg;
-		while (0 == (I2C_SERCOM->I2CM.INTFLAG.reg & SERCOM_I2CM_INTFLAG_SB));
-	}
-
-	if (size)
-	{
-		I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;
-		I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_CMD(3);
-		data[size-1] = I2C_SERCOM->I2CM.DATA.reg;
-	}
-
+	i2c_read_data = &data;
+	i2c_read_addr = addr;
+	// Send the address
+	isBMI = true;
+	bmi_steps = 0;
+	I2C_SERCOM->I2CM.ADDR.reg = (addr * 2) | I2C_TRANSFER_WRITE;
+	I2C_SERCOM->I2CM.INTENSET.reg = 1;
 	return size;
 }
 
@@ -348,7 +330,7 @@ void SERCOM3_Handler()
 			else if(bmi_steps == 1)		// perfrom read
 			{
 				I2C_SERCOM->I2CM.INTENCLR.reg = 1;							// interrupt clear MB
-				I2C_SERCOM->I2CM.ADDR.reg = (0x68 * 2) | I2C_TRANSFER_READ;	// send read bit
+				I2C_SERCOM->I2CM.ADDR.reg = (i2c_read_addr * 2) | I2C_TRANSFER_READ;	// send read bit
 				I2C_SERCOM->I2CM.CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;	// send ack
 				I2C_SERCOM->I2CM.INTENSET.reg = 2;							//set SB interrupt
 				bmi_steps++;
@@ -359,6 +341,8 @@ void SERCOM3_Handler()
 	{
 		if(isBMI){
 			if(bmi_steps == 7){		// at last step, close
+				i2c_read_data[bmi_steps -1 ] = I2C_SERCOM->I2CM.DATA.reg;
+
 				I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_ACKACT;	
 				I2C_SERCOM->I2CM.CTRLB.reg |= SERCOM_I2CM_CTRLB_CMD(3);
 				bmi_temp_store[bmi_steps - 2] = I2C_SERCOM->I2CM.DATA.reg;
